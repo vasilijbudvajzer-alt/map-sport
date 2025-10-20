@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Russia Running Map</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v7.4.0/ol.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background: #f8f9fa;
+            color: #212529;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        .sidebar {
+            width: 280px;
+            background: white;
+            padding: 20px;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        .logo img {
+            height: 40px;
+            margin-bottom: 8px;
+        }
+        .logo h1 {
+            font-size: 1.4rem;
+            color: #333;
+            font-weight: 700;
+        }
+        .calendar-controls {
+            margin-bottom: 20px;
+        }
+        .calendar-controls h3 {
+            margin-bottom: 12px;
+            color: #333;
+            font-size: 1.1rem;
+        }
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+        .btn {
+            width: 100%;
+            padding: 10px;
+            background: #FF6B6B;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #FF4757;
+        }
+        .last-update {
+            background: #f1f3f5;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            text-align: center;
+            margin-top: auto;
+        }
+        .popup {
+            background: white;
+            padding: 16px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            max-width: 300px;
+            border: 2px solid #FF4757;
+        }
+        .popup-title {
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        .popup-date {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 12px;
+        }
+        .popup-link {
+            display: inline-block;
+            background: #FF6B6B;
+            color: white;
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-align: center;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .popup-link:hover {
+            background: #FF4757;
+        }
+        .footer {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            font-size: 0.8rem;
+            color: #666;
+        }
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                height: auto;
+                max-height: 30vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="map-container">
+            <div id="map"></div>
+            <div class="footer">© MapTiler © OpenStreetMap contributors</div>
+        </div>
+
+        <div class="sidebar">
+            <div class="logo">
+                <img src="https://reg.russiarunning.com/assets/rr-logo-DRPrZr1v.svg" alt="Russia Running Map">
+                <h1>Russia Running Map</h1>
+            </div>
+
+            <div class="calendar-controls">
+                <h3>Фильтр по дате</h3>
+                <select id="yearSelect"></select>
+                <select id="monthSelect">
+                    <option value="all">Весь год</option>
+                    <option value="1">Январь</option>
+                    <option value="2">Февраль</option>
+                    <option value="3">Март</option>
+                    <option value="4">Апрель</option>
+                    <option value="5">Май</option>
+                    <option value="6">Июнь</option>
+                    <option value="7">Июль</option>
+                    <option value="8">Август</option>
+                    <option value="9">Сентябрь</option>
+                    <option value="10">Октябрь</option>
+                    <option value="11">Ноябрь</option>
+                    <option value="12">Декабрь</option>
+                </select>
+                <button id="applyFilter" class="btn">Применить</button>
+            </div>
+
+            <div class="last-update">
+                Последнее обновление: <span id="lastUpdateTime">-</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/ol@v7.4.0/dist/ol.js"></script>
+    <script>
+        const CONFIG = {
+            CENTER: [60.0, 55.0],
+            ZOOM: 3,
+            MAPTILER_KEY: 'ds5WXK3YI2r34qGCKwXu'
+        };
+
+        let map, vectorSource, eventsData = [];
+
+        function initMap() {
+            vectorSource = new ol.source.Vector();
+            const vectorLayer = new ol.layer.Vector({
+                source: vectorSource,
+                style: new ol.style.Style({
+                    image: new ol.style.Circle({
+                        radius: 10,
+                        fill: new ol.style.Fill({ color: '#FF6B6B' }),
+                        stroke: new ol.style.Stroke({ color: '#fff', width: 2 })
+                    })
+                })
+            });
+
+            map = new ol.Map({
+                target: 'map',
+                layers: [
+                    new ol.layer.Tile({
+                        source: new ol.source.XYZ({
+                            url: `https://api.maptiler.com/maps/bright-v2/{z}/{x}/{y}.png?key=${CONFIG.MAPTILER_KEY}`,
+                            attributions: '© MapTiler © OpenStreetMap contributors'
+                        })
+                    }),
+                    vectorLayer
+                ],
+                view: new ol.View({
+                    center: ol.proj.fromLonLat(CONFIG.CENTER),
+                    zoom: CONFIG.ZOOM
+                })
+            });
+
+            const popup = new ol.Overlay({
+                element: document.createElement('div'),
+                positioning: 'bottom-center',
+                stopEvent: true
+            });
+            popup.getElement().className = 'popup';
+            map.addOverlay(popup);
+
+            map.on('click', (e) => {
+                const features = map.getFeaturesAtPixel(e.pixel);
+                if (!features || features.length === 0) {
+                    popup.setPosition(undefined);
+                    return;
+                }
+                const event = features[0].get('event');
+                const date = new Date(event.date);
+                const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+                const formatted = `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+
+                popup.getElement().innerHTML = `
+                    <div class="popup-title">${event.name}</div>
+                    <div class="popup-date">${formatted}</div>
+                    <a href="${event.link}" target="_blank" class="popup-link">Регистрация</a>
+                `;
+                popup.setPosition(e.coordinate);
+            });
+        }
+
+        async function loadEvents() {
+            try {
+                const res = await fetch('/api/events');
+                if (!res.ok) throw new Error('Ошибка загрузки');
+                eventsData = await res.json();
+                renderYears();
+                filterEvents();
+                document.getElementById('lastUpdateTime').textContent = 
+                    new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
+            } catch (err) {
+                console.error(err);
+                alert('Не удалось загрузить события');
+            }
+        }
+
+        function renderYears() {
+            const yearSelect = document.getElementById('yearSelect');
+            const years = [...new Set(eventsData.map(e => new Date(e.date).getFullYear()))].sort();
+            yearSelect.innerHTML = '';
+            years.forEach(year => {
+                const opt = document.createElement('option');
+                opt.value = year;
+                opt.textContent = year;
+                yearSelect.appendChild(opt);
+            });
+        }
+
+        function filterEvents() {
+            const year = document.getElementById('yearSelect').value;
+            const month = document.getElementById('monthSelect').value;
+            vectorSource.clear();
+
+            const filtered = eventsData.filter(event => {
+                const date = new Date(event.date);
+                const eventYear = date.getFullYear();
+                const eventMonth = date.getMonth() + 1;
+                if (eventYear !== parseInt(year)) return false;
+                if (month !== 'all' && eventMonth !== parseInt(month)) return false;
+                return true;
+            });
+
+            filtered.forEach(event => {
+                const point = new ol.geom.Point(ol.proj.fromLonLat([event.lon, event.lat]));
+                const feature = new ol.Feature({ geometry: point, event });
+                vectorSource.addFeature(feature);
+            });
+        }
+
+        function init() {
+            initMap();
+            document.getElementById('applyFilter').addEventListener('click', filterEvents);
+            loadEvents();
+        }
+
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
