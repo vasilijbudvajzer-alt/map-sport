@@ -18,7 +18,7 @@ async function geocodeCity(city) {
     if (Array.isArray(data) && data.length > 0) {
       const coords = [parseFloat(data[0].lon), parseFloat(data[0].lat)];
       geocodeCache.set(city, coords);
-      await new Promise(r => setTimeout(r, 1100));
+      await new Promise(r => setTimeout(r, 1100)); // лимит Nominatim
       return coords;
     }
   } catch (e) {
@@ -37,80 +37,64 @@ async function fetchRunningEvents() {
   }
 
   const events = [];
-  let page = 1;
+  try {
+    const res = await axios.get('https://marathonec.ru/calendar-beg/', {
+      timeout: 10000,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
 
-  while (page <= 5) {
-    try {
-      const url = `https://reg.russiarunning.com/events/future?isForeign=false&isCountry=false&page=${page}`;
-      const res = await axios.get(url, {
-        timeout: 10000,
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    const $ = cheerio.load(res.data);
+
+    $('div.event-item').each((i, el) => {
+      const titleEl = $(el).find('h3 a');
+      const title = titleEl.text().trim();
+      const link = titleEl.attr('href');
+      const dateText = $(el).find('.event-date').text().trim();
+      const city = $(el).find('.event-location').text().trim();
+
+      if (!title || !link || !dateText || !city) return;
+
+      // Парсим дату: "25 мая 2025"
+      const dateMatch = dateText.match(/(\d{1,2})\s+([а-яё]+)\s+(\d{4})/i);
+      if (!dateMatch) return;
+
+      const day = parseInt(dateMatch[1]);
+      const monthName = dateMatch[2].toLowerCase();
+      const year = parseInt(dateMatch[3]);
+
+      const months = {
+        'января': 0, 'февраля': 1, 'марта': 2, 'апреля': 3,
+        'мая': 4, 'июня': 5, 'июля': 6, 'августа': 7,
+        'сентября': 8, 'октября': 9, 'ноября': 10, 'декабря': 11
+      };
+
+      const month = months[monthName];
+      if (month === undefined) return;
+
+      const eventDate = new Date(year, month, day);
+      if (eventDate < now) return; // только будущие
+
+      // Геокодирование
+      const coords = await geocodeCity(city);
+      if (!coords) return;
+
+      events.push({
+        name: title,
+        date: eventDate.toISOString(),
+        city: city,
+        lon: coords[0],
+        lat: coords[1],
+        link: link.startsWith('http') ? link : `https://marathonec.ru${link}`
       });
+    });
 
-      const $ = cheerio.load(res.data);
-      let found = false;
-
-      // Парсим карточки событий
-      $('div.event-card, .event-item, .event, [class*="event"]').each((i, el) => {
-        found = true;
-
-        const title = $(el).find('h2, h3, .event-title, a').first().text().trim();
-        const link = $(el).find('a').attr('href');
-        const dateText = $(el).find('.event-date, time, .date').text().trim();
-        const city = $(el).find('.event-city, .city, .location').text().trim();
-
-        if (!title || !link) return;
-
-        // Пробуем распарсить дату
-        let date = null;
-        const dateMatch = dateText.match(/(\d{1,2})\s+([а-яё]+)\s+(\d{4})/i);
-        if (dateMatch) {
-          const day = parseInt(dateMatch[1]);
-          const monthName = dateMatch[2].toLowerCase();
-          const year = parseInt(dateMatch[3]);
-
-          const months = {
-            'января': 0, 'февраля': 1, 'марта': 2, 'апреля': 3,
-            'мая': 4, 'июня': 5, 'июля': 6, 'августа': 7,
-            'сентября': 8, 'октября': 9, 'ноября': 10, 'декабря': 11
-          };
-
-          const month = months[monthName];
-          if (month !== undefined) {
-            date = new Date(year, month, day);
-          }
-        }
-
-        if (!date || date < now) return;
-
-        // Геокодирование
-        let coords = null;
-        if (city) {
-          coords = await geocodeCity(city);
-        }
-        if (!coords) return;
-
-        events.push({
-          name: title,
-          date: date.toISOString(),
-          city: city,
-          lon: coords[0],
-          lat: coords[1],
-          link: link.startsWith('http') ? link : `https://reg.russiarunning.com${link}`
-        });
-      });
-
-      if (!found) break; // больше нет событий
-      page++;
-    } catch (e) {
-      console.error(`Ошибка на странице ${page}:`, e.message);
-      break;
-    }
+  } catch (e) {
+    console.error('Ошибка парсинга marathonec.ru:', e.message);
   }
 
   cachedEvents = events;
   lastFetch = now;
-  console.log(`✅ Загружено ${cachedEvents.length} событий`);
+  console.log(`✅ Загружено ${cachedEvents.length} событий с marathonec.ru`);
   return cachedEvents;
 }
 
