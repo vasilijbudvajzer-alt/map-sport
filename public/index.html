@@ -12,7 +12,7 @@
         .map { flex: 1; position: relative; }
         #map { width: 100%; height: 100%; }
         .sidebar {
-            width: 320px;
+            width: 300px;
             background: white;
             padding: 20px;
             box-shadow: -2px 0 10px rgba(0,0,0,0.1);
@@ -20,15 +20,13 @@
             flex-direction: column;
             gap: 20px;
         }
-        .logo {
-            text-align: center;
-            margin-bottom: 10px;
-        }
         .logo h1 {
             font-size: 1.4rem;
             color: #e74c3c;
+            text-align: center;
+            margin-bottom: 10px;
         }
-        /* === КАЛЕНДАРЬ === */
+        /* Календарь */
         .calendar {
             border: 1px solid #eee;
             border-radius: 8px;
@@ -56,7 +54,6 @@
         .calendar-day {
             padding: 12px 4px;
             font-size: 0.9rem;
-            cursor: default;
             background: #f8f9fa;
             color: #999;
         }
@@ -65,30 +62,7 @@
             color: white;
             font-weight: bold;
         }
-        /* === СПОРТ === */
-        .sport-filter {
-            border: 1px solid #eee;
-            border-radius: 8px;
-            padding: 16px;
-        }
-        .sport-filter h3 {
-            margin-bottom: 12px;
-            font-size: 1.1rem;
-        }
-        .sport-options {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .sport-option {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .sport-option input {
-            accent-color: #e74c3c;
-        }
-        /* === ПОПАП === */
+        /* Попап */
         .popup {
             background: white;
             padding: 16px;
@@ -97,16 +71,8 @@
             max-width: 300px;
             border: 2px solid #e74c3c;
         }
-        .popup-title {
-            font-size: 1.1rem;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-        .popup-date {
-            font-size: 0.9rem;
-            color: #666;
-            margin-bottom: 12px;
-        }
+        .popup-title { font-size: 1.1rem; margin-bottom: 8px; font-weight: 600; }
+        .popup-date { font-size: 0.9rem; color: #666; margin-bottom: 12px; }
         .popup-link {
             display: inline-block;
             background: #e74c3c;
@@ -119,9 +85,6 @@
             text-align: center;
             width: 100%;
         }
-        .popup-link:hover {
-            background: #c0392b;
-        }
         .loading {
             position: absolute;
             top: 50%;
@@ -132,20 +95,12 @@
             border-radius: 8px;
             z-index: 10;
         }
-        .footer {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            font-size: 0.8rem;
-            color: #666;
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="map">
             <div id="map"></div>
-            <div class="footer">© MapTiler © OpenStreetMap contributors</div>
             <div class="loading" id="loading">Загрузка событий...</div>
         </div>
 
@@ -154,7 +109,6 @@
                 <h1>Russia Running Map</h1>
             </div>
 
-            <!-- КАЛЕНДАРЬ -->
             <div class="calendar">
                 <div class="calendar-header">
                     <button id="prevMonth"><</button>
@@ -162,7 +116,6 @@
                     <button id="nextMonth">></button>
                 </div>
                 <div class="calendar-grid" id="calendarGrid">
-                    <!-- Дни недели -->
                     <div class="calendar-day-name">Пн</div>
                     <div class="calendar-day-name">Вт</div>
                     <div class="calendar-day-name">Ср</div>
@@ -170,26 +123,6 @@
                     <div class="calendar-day-name">Пт</div>
                     <div class="calendar-day-name">Сб</div>
                     <div class="calendar-day-name">Вс</div>
-                    <!-- Дни месяца будут здесь -->
-                </div>
-            </div>
-
-            <!-- ВИДЫ СПОРТА (только верстка) -->
-            <div class="sport-filter">
-                <h3>Виды спорта</h3>
-                <div class="sport-options">
-                    <label class="sport-option">
-                        <input type="checkbox" checked> Бег
-                    </label>
-                    <label class="sport-option">
-                        <input type="checkbox"> Бег триал
-                    </label>
-                    <label class="sport-option">
-                        <input type="checkbox"> Триатлон
-                    </label>
-                    <label class="sport-option">
-                        <input type="checkbox"> Плавание
-                    </label>
                 </div>
             </div>
         </div>
@@ -201,7 +134,6 @@
         let currentDate = new Date();
         let map, vectorSource;
 
-        // === ИНИЦИАЛИЗАЦИЯ КАРТЫ ===
         function initMap() {
             vectorSource = new ol.source.Vector();
             const vectorLayer = new ol.layer.Vector({
@@ -218,14 +150,12 @@
             map = new ol.Map({
                 target: 'map',
                 layers: [
-                    new ol.layer.Tile({
-                        source: new ol.source.OSM()
-                    }),
+                    new ol.layer.Tile({ source: new ol.source.OSM() }),
                     vectorLayer
                 ],
                 view: new ol.View({
-                    center: ol.proj.fromLonLat([60.0, 55.0]), // Урал
-                    zoom: 3 // вся Россия
+                    center: ol.proj.fromLonLat([60.0, 55.0]),
+                    zoom: 3
                 })
             });
 
@@ -235,10 +165,7 @@
 
             map.on('click', (e) => {
                 const features = map.getFeaturesAtPixel(e.pixel);
-                if (!features || features.length === 0) {
-                    popup.setPosition(undefined);
-                    return;
-                }
+                if (!features || features.length === 0) return;
                 const event = features[0].get('event');
                 const date = new Date(event.date);
                 const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
@@ -253,14 +180,12 @@
             });
         }
 
-        // === ЗАГРУЗКА СОБЫТИЙ ===
         async function loadEvents() {
             try {
                 const res = await fetch('/api/events');
                 if (!res.ok) throw new Error('Ошибка загрузки');
                 events = await res.json();
 
-                // Очистка и отрисовка меток
                 vectorSource.clear();
                 events.forEach(event => {
                     const point = new ol.geom.Point(ol.proj.fromLonLat([event.lon, event.lat]));
@@ -268,7 +193,6 @@
                     vectorSource.addFeature(feature);
                 });
 
-                // Обновление календаря
                 renderCalendar();
                 document.getElementById('loading').style.display = 'none';
             } catch (err) {
@@ -277,15 +201,13 @@
             }
         }
 
-        // === КАЛЕНДАРЬ ===
         function renderCalendar() {
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth();
             const firstDay = new Date(year, month, 1);
             const lastDay = new Date(year, month + 1, 0);
-            const startDay = firstDay.getDay() || 7; // Пн = 1
+            const startDay = firstDay.getDay() || 7;
 
-            // Собираем дни со событиями
             const eventDays = new Set();
             events.forEach(e => {
                 const d = new Date(e.date);
@@ -294,35 +216,27 @@
                 }
             });
 
-            // Отрисовка
             const grid = document.getElementById('calendarGrid');
-            // Очищаем дни (оставляем заголовки)
             while (grid.children.length > 7) grid.removeChild(grid.lastChild);
 
-            // Пустые ячейки до 1-го числа
             for (let i = 1; i < startDay; i++) {
                 const dayEl = document.createElement('div');
                 dayEl.className = 'calendar-day';
                 grid.appendChild(dayEl);
             }
 
-            // Дни месяца
             for (let day = 1; day <= lastDay.getDate(); day++) {
                 const dayEl = document.createElement('div');
                 dayEl.className = 'calendar-day';
-                if (eventDays.has(day)) {
-                    dayEl.classList.add('has-event');
-                }
+                if (eventDays.has(day)) dayEl.classList.add('has-event');
                 dayEl.textContent = day;
                 grid.appendChild(dayEl);
             }
 
-            // Обновляем заголовок
             const monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
             document.getElementById('currentMonth').textContent = `${monthNames[month]} ${year}`;
         }
 
-        // === НАВИГАЦИЯ ПО КАЛЕНДАРЮ ===
         document.getElementById('prevMonth').addEventListener('click', () => {
             currentDate.setMonth(currentDate.getMonth() - 1);
             renderCalendar();
@@ -332,13 +246,10 @@
             renderCalendar();
         });
 
-        // === ИНИЦИАЛИЗАЦИЯ ===
-        function init() {
+        window.addEventListener('load', () => {
             initMap();
             loadEvents();
-        }
-
-        window.addEventListener('load', init);
+        });
     </script>
 </body>
 </html>

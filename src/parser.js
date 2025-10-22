@@ -1,7 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-// Кэш геокодирования
 const geocodeCache = new Map();
 
 async function geocodeCity(city) {
@@ -18,7 +17,7 @@ async function geocodeCity(city) {
     if (Array.isArray(data) && data.length > 0) {
       const coords = [parseFloat(data[0].lon), parseFloat(data[0].lat)];
       geocodeCache.set(city, coords);
-      await new Promise(r => setTimeout(r, 1100)); // лимит Nominatim
+      await new Promise(r => setTimeout(r, 1100));
       return coords;
     }
   } catch (e) {
@@ -44,7 +43,6 @@ async function fetchRunningEvents() {
     });
 
     const $ = cheerio.load(res.data);
-
     $('div.event-item').each((i, el) => {
       const titleEl = $(el).find('h3 a');
       const title = titleEl.text().trim();
@@ -54,7 +52,6 @@ async function fetchRunningEvents() {
 
       if (!title || !link || !dateText || !city) return;
 
-      // Парсим дату: "25 мая 2025"
       const dateMatch = dateText.match(/(\d{1,2})\s+([а-яё]+)\s+(\d{4})/i);
       if (!dateMatch) return;
 
@@ -72,9 +69,8 @@ async function fetchRunningEvents() {
       if (month === undefined) return;
 
       const eventDate = new Date(year, month, day);
-      if (eventDate < now) return; // только будущие
+      if (eventDate < now) return;
 
-      // Геокодирование
       const coords = await geocodeCity(city);
       if (!coords) return;
 
@@ -89,12 +85,11 @@ async function fetchRunningEvents() {
     });
 
   } catch (e) {
-    console.error('Ошибка парсинга marathonec.ru:', e.message);
+    console.error('Ошибка парсинга:', e.message);
   }
 
   cachedEvents = events;
   lastFetch = now;
-  console.log(`✅ Загружено ${cachedEvents.length} событий с marathonec.ru`);
   return cachedEvents;
 }
 

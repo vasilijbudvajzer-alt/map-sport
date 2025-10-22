@@ -1,11 +1,8 @@
 {
   "name": "russia-running-map",
   "version": "1.0.0",
-  "description": "Интерактивная карта беговых событий России",
-  "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "start": "node src/server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -13,19 +10,7 @@
     "axios": "^1.6.0",
     "cheerio": "^1.0.0-rc.12"
   },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
-  },
   "engines": {
     "node": ">=18"
-  },
-  "keywords": [
-    "running",
-    "events",
-    "map",
-    "russia",
-    "marathon"
-  ],
-  "author": "Your Name",
-  "license": "MIT"
+  }
 }
