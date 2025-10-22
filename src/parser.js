@@ -1,44 +1,32 @@
 const axios = require('axios');
+const cheerio = require('cheerio');
 
-// Кэш геокодирования: город → [lon, lat]
+// Кэш геокодирования
 const geocodeCache = new Map();
 
-// Геокодирование через Nominatim (OpenStreetMap)
 async function geocodeCity(city) {
-  if (geocodeCache.has(city)) {
-    return geocodeCache.get(city);
-  }
+  if (geocodeCache.has(city)) return geocodeCache.get(city);
 
   try {
-    // Запрос к Nominatim
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city + ', Россия')}`;
-    const response = await axios.get(url, {
+    const res = await axios.get(url, {
       timeout: 5000,
-      headers: {
-        'User-Agent': 'RussiaRunningMap/1.0 (+https://your-site.onrender.com)'
-      }
+      headers: { 'User-Agent': 'RussiaRunningMap/1.0' }
     });
 
-    const data = response.data;
+    const data = res.data;
     if (Array.isArray(data) && data.length > 0) {
-      // Берём первый результат (наиболее релевантный)
-      const result = data[0];
-      const coords = [parseFloat(result.lon), parseFloat(result.lat)];
+      const coords = [parseFloat(data[0].lon), parseFloat(data[0].lat)];
       geocodeCache.set(city, coords);
-
-      // Уважаем лимиты Nominatim: не более 1 запроса в секунду
-      await new Promise(resolve => setTimeout(resolve, 1100));
-
+      await new Promise(r => setTimeout(r, 1100));
       return coords;
     }
-  } catch (error) {
-    console.warn(`⚠️ Не удалось геокодировать город: ${city}`, error.message);
+  } catch (e) {
+    console.warn(`Геокодирование не удалось: ${city}`);
   }
-
   return null;
 }
 
-// Основная функция парсинга
 let cachedEvents = [];
 let lastFetch = 0;
 
@@ -51,61 +39,78 @@ async function fetchRunningEvents() {
   const events = [];
   let page = 1;
 
-  while (page <= 10) {
+  while (page <= 5) {
     try {
-      const res = await axios.get('https://reg.russiarunning.com/api/v1/events', {
-        params: { isForeign: false, isCountry: false, page },
+      const url = `https://reg.russiarunning.com/events/future?isForeign=false&isCountry=false&page=${page}`;
+      const res = await axios.get(url, {
         timeout: 10000,
-        headers: { 'User-Agent': 'RussiaRunningMap/1.0' }
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
       });
 
-      const data = res.data.data || [];
-      if (data.length === 0) break;
+      const $ = cheerio.load(res.data);
+      let found = false;
 
-      for (const item of data) {
-        const eventDate = new Date(item.date);
-        if (eventDate < now) continue; // только будущие
+      // Парсим карточки событий
+      $('div.event-card, .event-item, .event, [class*="event"]').each((i, el) => {
+        found = true;
 
-        let lon = item.longitude;
-        let lat = item.latitude;
-        let city = item.city;
+        const title = $(el).find('h2, h3, .event-title, a').first().text().trim();
+        const link = $(el).find('a').attr('href');
+        const dateText = $(el).find('.event-date, time, .date').text().trim();
+        const city = $(el).find('.event-city, .city, .location').text().trim();
 
-        // Если координат нет — геокодируем город
-        if (!lon || !lat || !city) {
-          continue; // пропускаем без города
-        }
+        if (!title || !link) return;
 
-        if (!lon || !lat) {
-          const coords = await geocodeCity(city);
-          if (coords) {
-            lon = coords[0];
-            lat = coords[1];
-          } else {
-            continue; // пропускаем, если не удалось геокодировать
+        // Пробуем распарсить дату
+        let date = null;
+        const dateMatch = dateText.match(/(\d{1,2})\s+([а-яё]+)\s+(\d{4})/i);
+        if (dateMatch) {
+          const day = parseInt(dateMatch[1]);
+          const monthName = dateMatch[2].toLowerCase();
+          const year = parseInt(dateMatch[3]);
+
+          const months = {
+            'января': 0, 'февраля': 1, 'марта': 2, 'апреля': 3,
+            'мая': 4, 'июня': 5, 'июля': 6, 'августа': 7,
+            'сентября': 8, 'октября': 9, 'ноября': 10, 'декабря': 11
+          };
+
+          const month = months[monthName];
+          if (month !== undefined) {
+            date = new Date(year, month, day);
           }
         }
 
-        events.push({
-          id: item.id,
-          name: item.name,
-          date: item.date,
-          city: city,
-          lon: parseFloat(lon),
-          lat: parseFloat(lat),
-          link: `https://reg.russiarunning.com/events/${item.id}`
-        });
-      }
+        if (!date || date < now) return;
 
+        // Геокодирование
+        let coords = null;
+        if (city) {
+          coords = await geocodeCity(city);
+        }
+        if (!coords) return;
+
+        events.push({
+          name: title,
+          date: date.toISOString(),
+          city: city,
+          lon: coords[0],
+          lat: coords[1],
+          link: link.startsWith('http') ? link : `https://reg.russiarunning.com${link}`
+        });
+      });
+
+      if (!found) break; // больше нет событий
       page++;
     } catch (e) {
-      console.warn(`Ошибка на странице ${page}:`, e.message);
+      console.error(`Ошибка на странице ${page}:`, e.message);
       break;
     }
   }
 
   cachedEvents = events;
   lastFetch = now;
-  console.log(`✅ Загружено ${cachedEvents.length} будущих событий`);
+  console.log(`✅ Загружено ${cachedEvents.length} событий`);
   return cachedEvents;
 }
 
